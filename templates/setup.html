@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% set here = table %}
+{% set defaults = {"offs": 1, "max_hours": 9, "need": "1111110", "start_h": 9, "end_h": 18, "holidays": 0, "backup": 0} %}
+{% set notes = {
+  "employees": "Weekly offs per week, an optional preferred day off (a preference: coverage comes first) and the longest day they can work.",
+  "pods": "Each pod has a lead who oversees its people.",
+  "brands": "Clients. A brand's processes and their calendars are set under Coverage rules.",
+  "processes": "Kinds of work, such as Customer Support or NDR.",
+  "lines": "The operating calendar of each brand process: the minimum people needed on each weekday (0 = closed), whether it runs on public holidays, and its shift.",
+  "assignments": "Who can cover which brand process. A backup counts toward coverage but is there to fill in.",
+  "leaves": "Approved leave, comp-offs and other unavailability. Saving updates any planned roster and shows what it breaks.",
+  "holidays": "Public holidays. Processes that do not run on holidays close that day; 365-day processes stay open."} %}
+{% block title %}{{ title }} · Roster{% endblock %}
+{% block main %}
+<h1>{{ title }}</h1>
+<p class="muted small" style="max-width: 80ch">{{ notes[table] }}</p>
+{% if msg %}<div class="flash">{{ msg }}</div>{% endif %}
+
+<div class="pane" style="margin: 18px 0">
+  <header><h3>{{ "Edit" if current else "Add" }}</h3>{% if current %}<a class="small" href="/setup/{{ table }}">Cancel</a>{% endif %}</header>
+  <form method="post" action="/setup/{{ table }}" class="in row" style="align-items: flex-end; gap: 12px">
+    {% if current %}<input type="hidden" name="id" value="{{ current.id }}">{% endif %}
+    {% for k, label, t in fields %}{% set v = current[k] if current else defaults.get(k) %}
+    <label class="small muted">{{ label }}<br>
+      {% if t in tables %}
+      <select name="{{ k }}">{% if k in ("pod_id", "lead_id") %}<option value="">None</option>{% endif %}
+        {% for i, n in options[k] %}<option value="{{ i }}"{{ ' selected' if v == i }}>{{ n }}</option>{% endfor %}</select>
+      {% elif t == "weekday" %}
+      <select name="{{ k }}"><option value="">None</option>{% for d in DAYS %}<option value="{{ loop.index0 }}"{{ ' selected' if v == loop.index0 }}>{{ d }}</option>{% endfor %}</select>
+      {% elif t == "kind" %}
+      <select name="{{ k }}">{% for x in kinds %}<option{{ ' selected' if v == x }}>{{ x }}</option>{% endfor %}</select>
+      {% elif t == "week" %}
+      <span class="row" style="gap: 4px">{% for d in DAYS %}<span style="text-align: center">{{ d[:2] }}<br><input name="{{ k }}{{ loop.index0 }}" value="{{ v[loop.index0] }}" size="1" style="width: 38px; text-align: center" inputmode="numeric"></span>{% endfor %}</span>
+      {% elif t == "bool" %}
+      <input type="checkbox" name="{{ k }}" value="1"{{ ' checked' if v }} style="margin: 9px 0">
+      {% else %}
+      <input name="{{ k }}" value="{{ v if v is not none else '' }}" {% if t == "date" %}type="date"{% elif t in ("int", "hour") %}type="number" min="0" max="{{ 24 if t == 'hour' else 31 }}" style="width: 84px"{% else %}required{% endif %}>
+      {% endif %}
+    </label>
+    {% endfor %}
+    <button class="primary">Save</button>
+  </form>
+</div>
+
+<div class="pane"><div class="scroll"><table>
+  <tr>{% for k, label, t in fields %}<th>{{ label }}</th>{% endfor %}<th></th></tr>
+  {% for r in rows %}
+  <tr>{% for k, label, t in fields %}{% set v = r[k] %}
+    <td>{% if t in tables %}{{ refs[k].get(v, "") }}{% elif t == "bool" %}{{ "Yes" if v }}{% elif t == "weekday" %}{{ DAYS[v] if v is not none }}{% elif t == "week" %}{{ r|cal }}{% elif t == "hour" %}{{ v }}:00{% else %}{{ v }}{% endif %}</td>
+    {% endfor %}
+    <td style="text-align: right; white-space: nowrap"><a class="small" href="/setup/{{ table }}?edit={{ r.id }}">Edit</a>
+      <form method="post" action="/setup/{{ table }}/{{ r.id }}/delete" class="inline" onsubmit="return confirm('Remove this? Anything that depends on it goes too.')"><button class="ghost">Remove</button></form></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="{{ fields|length + 1 }}" class="muted">Nothing yet.</td></tr>
+  {% endfor %}
+</table></div></div>
+{% endblock %}

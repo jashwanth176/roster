@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% set here = "roster" %}
+{% block title %}Roster · {{ m.title }}{% endblock %}
+{% block head %}
+<style>
+.grid { width: auto; min-width: 100%; font-size: 12px; }
+.grid th, .grid td { padding: 0; text-align: center; border-bottom: 1px solid var(--line); border-left: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.grid th.who, .grid td.who { position: sticky; left: 0; z-index: 1; background: var(--paper); text-align: left; padding: 6px 12px; min-width: 210px; max-width: 260px; border-left: 0; }
+.grid td.who small { display: block; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grid th.d { width: 30px; min-width: 30px; padding: 4px 0; line-height: 1.2; }
+.grid th.d a { color: inherit; text-decoration: none; display: block; }
+.grid th.d b { display: block; font: 600 12px var(--mono); color: var(--ink); }
+.grid th.wk, .grid td.wk { background: color-mix(in srgb, var(--ink) 3%, var(--paper)); }
+.grid th.hol { color: var(--signal); }
+.grid th.sel { box-shadow: inset 0 -2px var(--signal); }
+.grid td.c { height: 30px; font: 600 11px var(--mono); color: var(--muted); cursor: pointer; position: relative; }
+.grid td.c:hover { outline: 2px solid var(--signal); outline-offset: -2px; }
+.grid td.s-O { background: var(--empty); }
+.grid td.s-H { background: var(--signal-soft); color: var(--signal); }
+.grid td.s-L, .grid td.s-U { background: color-mix(in srgb, var(--timing) 16%, var(--paper)); color: var(--timing); cursor: default; }
+.grid td.s-C { background: color-mix(in srgb, var(--good) 14%, var(--paper)); color: var(--good); cursor: default; }
+.grid td.lk::after { content: ""; position: absolute; top: 3px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--signal); }
+.grid tr.pod td { text-align: left; padding: 8px 12px; background: var(--bg); font-weight: 600; font-size: 12px; }
+.grid tr.pod td span { color: var(--muted); font-weight: 400; }
+.grid td.k { height: 26px; font: 500 11px var(--mono); }
+.grid td.k.shut { color: color-mix(in srgb, var(--muted) 50%, transparent); }
+.grid td.k.ok { color: var(--good); }
+.grid td.k.short { background: color-mix(in srgb, var(--defend) 16%, var(--paper)); color: var(--defend); font-weight: 700; }
+.grid tr.cov td.who { background: color-mix(in srgb, var(--signal-soft) 50%, var(--paper)); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 10px 2px 0; }
+.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -3px; margin-right: 5px; border: 1px solid var(--line); font: 600 9px/12px var(--mono); text-align: center; font-style: normal; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 22px 0 12px; }
+.tabs a { padding: 5px 12px; border-radius: 999px; color: var(--ink); text-decoration: none; font-size: 13px; font-weight: 500; }
+.tabs a.on { background: var(--paper); box-shadow: var(--shadow); }
+.issues { display: grid; gap: 12px; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 14px 16px; }
+.card.bad { border-left: 3px solid var(--defend); } .card.warn { border-left: 3px solid var(--timing); }
+.card ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.card li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.card li > b { font-family: var(--mono); font-weight: 500; font-size: 12px; min-width: 64px; }
+.card .ai { margin-top: 10px; padding: 10px 12px; border-radius: var(--r-ctl); background: var(--signal-soft); font-size: 13px; display: none; }
+#menu { position: absolute; z-index: 30; display: none; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-ctl); box-shadow: var(--shadow); padding: 6px; }
+#menu p { margin: 2px 6px 6px; font-size: 12px; color: var(--muted); }
+#menu button { display: block; width: 100%; text-align: left; border: 0; }
+.daylist td:first-child { width: 34%; }
+</style>
+{% endblock %}
+{% macro dayname(d) %}{{ DAYS[m.wd[d]] }} {{ d[8:]|int }}{% endmacro %}
+{% block main %}
+{% set q = "&view=" ~ view ~ "&id=" ~ id %}
+<div class="row" style="justify-content: space-between">
+  <div>
+    <h1>Roster · {{ m.title }}</h1>
+    <div class="muted small">{% if not m.exists %}Not planned yet{% elif published %}Published {{ published }} UTC{% if changes %} · {{ changes|length }} change{{ 's' if changes|length != 1 }} since{% endif %}{% else %}Draft{% endif %}</div>
+  </div>
+  <div class="row">
+    <form method="get" action="/roster" class="row"><input type="month" name="month" value="{{ m.month }}" onchange="this.form.submit()"><input type="hidden" name="view" value="{{ view }}"></form>
+    <form method="post" action="/roster/generate" class="inline"><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}"><input type="hidden" name="id" value="{{ id }}">
+      <button class="primary" title="Plans every cell you have not changed by hand">{{ ("Re-plan, keep " ~ locked ~ " manual change" ~ ("s" if locked != 1 else "")) if m.exists and locked else ("Re-plan" if m.exists else "Generate roster") }}</button></form>
+    {% if m.exists %}
+    <form method="post" action="/roster/publish" class="inline" onsubmit="return {{ 'confirm(\'' ~ blocking ~ ' blocking issues are still open. Publish anyway?\')' if blocking else 'true' }}"><input type="hidden" name="month" value="{{ m.month }}"><button>Publish</button></form>
+    <a class="btn" href="/roster.csv?month={{ m.month }}">Export CSV</a>
+    {% endif %}
+  </div>
+</div>
+{% if msg %}<div class="flash">{{ msg }}</div>{% endif %}
+
+{% if not m.exists %}
+<div class="pane" style="margin-top: 20px"><div class="in">
+  <h3>No roster for {{ m.title }} yet</h3>
+  <p class="muted small">Generating plans weekly offs around every brand's coverage rules, approved leave, comp-offs and public holidays, then lists anything it could not satisfy. {{ m.emps|length }} employees, {{ m.lines|length }} brand processes and {{ m.hol|length }} public holiday{{ 's' if m.hol|length != 1 }} this month.</p>
+</div></div>
+{% else %}
+
+{% set gapdays = issues.gaps|sum(attribute="days", start=[])|length %}
+<div class="stats">
+  <div><strong style="color: {{ 'var(--defend)' if blocking else 'var(--good)' }}">{{ blocking }}</strong><span>blocking issues</span></div>
+  <div><strong>{{ issues.gaps|length }}</strong><span>brand processes short on {{ gapdays }} day{{ 's' if gapdays != 1 }}</span></div>
+  <div><strong>{{ issues.rules|length }}</strong><span>rule warnings</span></div>
+  <div><strong>{{ issues.prefs|length }}</strong><span>preferences not met</span></div>
+  <div><strong>{{ locked }}</strong><span>manual changes, kept on re-plan</span></div>
+</div>
+
+<div class="tabs">
+  {% for v in ["company", "pod", "brand", "process", "employee"] %}<a class="{{ 'on' if view == v }}" href="/roster?month={{ m.month }}&view={{ v }}">{{ v|capitalize }}</a>{% endfor %}
+  {% if view in choices %}
+  <form method="get" action="/roster" style="margin-left: 8px"><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}">
+    <select name="id" onchange="this.form.submit()">{% for i, n in choices[view] %}<option value="{{ i }}"{{ ' selected' if i == id }}>{{ n }}</option>{% endfor %}</select></form>
+  {% endif %}
+</div>
+
+{% if tally %}
+<div class="stats">
+  {% for code, label in [("W", "working days"), ("O", "weekly offs"), ("H", "public holidays off"), ("L", "leave days"), ("C", "comp-offs taken")] %}<div><strong>{{ tally[code] or 0 }}</strong><span>{{ label }}</span></div>{% endfor %}
+  <div><strong>{{ earned|length }}</strong><span>comp-offs earned{% if earned %} for working {% for d in earned %}{{ m.hol[d] }}{{ ", " if not loop.last }}{% endfor %}{% endif %}</span></div>
+</div>
+{% endif %}
+
+<div class="pane"><div class="scroll">
+<table class="grid">
+  <tr><th class="who">{{ {"company": "Everyone, by pod", "pod": "Pod", "brand": "Coverage and staff", "process": "Coverage and staff", "employee": "Employee"}[view] }}</th>
+    {% for d in m.days %}<th class="d{{ ' wk' if m.wd[d] >= 5 }}{{ ' hol' if d in m.hol }}{{ ' sel' if d == day }}" title="{{ m.hol.get(d, '') }}"><a href="/roster?month={{ m.month }}{{ q }}&day={{ d }}#day">{{ DAYS[m.wd[d]][0] }}<b>{{ d[8:]|int }}</b></a></th>{% endfor %}</tr>
+  {% if view == "company" %}
+  <tr class="cov"><td class="who">Brand processes short<small>of {{ m.lines|length }}, per day</small></td>
+    {% for d in m.days %}{% set n = namespace(v=0) %}{% for l in m.lines %}{% if m.have(l, d) < m.need(l, d) %}{% set n.v = n.v + 1 %}{% endif %}{% endfor %}<td class="k {{ 'short' if n.v else 'ok' }}">{{ n.v if n.v else "✓" }}</td>{% endfor %}</tr>
+  {% else %}
+  {% for l in lines %}{% set x = m.lines[l] %}
+  <tr class="cov"><td class="who">{{ x.brand }} · {{ x.process }}<small>{{ x|cal }} · {{ x.start_h }}:00–{{ x.end_h }}:00</small></td>
+    {% for d in m.days %}{% set n, h = m.need(l, d), m.have(l, d) %}<td class="k {{ 'shut' if not n else ('short' if h < n else 'ok') }}" title="{{ dayname(d) }}: {{ h }} working, {{ n }} needed">{{ h if n else "·" }}</td>{% endfor %}</tr>
+  {% endfor %}
+  {% endif %}
+  {% set ns = namespace(pod=-1) %}
+  {% for e in emps %}{% set x = m.emps[e] %}
+  {% if view == "company" and x.pod_id != ns.pod %}{% set ns.pod = x.pod_id %}
+  <tr class="pod"><td colspan="{{ m.days|length + 1 }}">{{ x.pod or "No pod" }} {% if x.pod_id in pods and pods[x.pod_id].lead %}<span>· lead {{ pods[x.pod_id].lead }}</span>{% endif %}</td></tr>
+  {% endif %}
+  <tr><td class="who"><a href="/roster?month={{ m.month }}&view=employee&id={{ e }}" style="color: inherit; text-decoration: none">{{ x.name }}</a>
+    <small>{{ m.brands(e)|join(", ") or "No assignments" }}</small></td>
+    {% for d in m.days %}{% set s = m.st.get((e, d), "W") %}{% set cv = m.cover.get((e, d)) %}
+    <td class="c s-{{ s }}{{ ' lk' if (e, d) in m.locked and s not in 'LCU' }}{{ ' wk' if s == 'W' and m.wd[d] >= 5 }}" data-e="{{ e }}" data-d="{{ d }}" data-h="{{ 1 if d in m.hol }}" data-n="{{ x.name }} · {{ dayname(d) }}"
+        title="{{ x.name }} · {{ dayname(d) }} · {{ LABEL[s] }}{% if cv and cv in m.lines %} · covering {{ m.lines[cv].brand }} {{ m.lines[cv].process }}{% endif %}">{{ "+" if cv else ("" if s == "W" else s) }}</td>{% endfor %}</tr>
+  {% endfor %}
+</table>
+</div></div>
+<div class="legend">
+  <span><i></i>working</span><span><i style="background: var(--empty)">O</i>weekly off</span><span><i style="background: var(--signal-soft)">H</i>public holiday</span>
+  <span><i style="background: color-mix(in srgb, var(--timing) 16%, var(--paper))">L</i>leave or unavailable</span><span><i style="background: color-mix(in srgb, var(--good) 14%, var(--paper))">C</i>comp-off</span>
+  <span><i>+</i>covering another brand</span><span><i style="position: relative">•</i>changed by hand</span><span>Click a cell to change it, a date to see that day.</span>
+</div>
+
+{% if day %}
+<h2 id="day">{{ dayname(day) }} {{ m.title.split()[0] }}{% if day in m.hol %} · {{ m.hol[day] }}{% endif %}</h2>
+<div class="pane"><table class="daylist">
+  <tr><th>Brand · process</th><th>Working</th><th>Off</th><th>Cover</th></tr>
+  {% for l in lines %}{% set n = m.need(l, day) %}{% if n %}{% set x = m.lines[l] %}
+  <tr><td>{{ x.brand }} · {{ x.process }}</td>
+    <td>{% for e in m.staff[l] if m.on(e, day) %}{{ m.emps[e].name }}{{ ", " if not loop.last }}{% endfor %}{% for (e2, dd), c in m.cover.items() if c == l and dd == day and m.on(e2, day) %} + {{ m.emps[e2].name }}{% endfor %}</td>
+    <td class="muted">{% for e in m.staff[l] if not m.on(e, day) %}{{ m.emps[e].name }} ({{ LABEL[m.st.get((e, day), "W")] }}){{ ", " if not loop.last }}{% endfor %}</td>
+    <td>{% set h = m.have(l, day) %}<span class="tag {{ 'bad' if h < n else 'ok' }}">{{ h }} of {{ n }}</span></td></tr>
+  {% endif %}{% endfor %}
+</table></div>
+{% endif %}
+
+<h2>Needs attention <span class="n">mandatory first, then rules, then preferences</span></h2>
+<div class="issues">
+  {% if not (issues.gaps or issues.spread or issues.conflicts or issues.rules or issues.prefs) %}<div class="card"><span class="tag ok">Clear</span> Every brand process is covered and every rule is met.</div>{% endif %}
+  {% for s in issues.spread %}
+  <div class="card bad"><span class="tag bad">Across brands</span> <b>{{ m.emps[s.emp].name }}</b> being off on {{ dayname(s.day) }} leaves {{ s.brands|join(" and ") }} short on the same day.</div>
+  {% endfor %}
+  {% for g in issues.gaps %}{% set x = m.lines[g.line] %}
+  <div class="card bad">
+    <div class="row" style="justify-content: space-between">
+      <div><span class="tag bad">Coverage gap</span> <b>{{ x.brand }} · {{ x.process }}</b> is short on {{ g.days|length }} day{{ 's' if g.days|length != 1 }}
+        <div class="muted small">{{ x|cal }} · {% if m.staff[g.line] %}assigned: {% for e in m.staff[g.line] %}{{ m.emps[e].name }}{{ " (backup)" if (e, g.line) in m.backup }}{{ ", " if not loop.last }}{% endfor %}{% else %}nobody is assigned to this process{% endif %}</div></div>
+      {% if ai() %}<button class="ghost" onclick="explain(this, {{ g.line }})">Explain</button>{% endif %}
+    </div>
+    <ul>
+      {% for d in g.days[:10] %}
+      <li><b>{{ dayname(d.day) }}</b> {{ d.have }} of {{ d.need }}
+        <span class="muted">· {% for e, s in d.absent %}{{ m.emps[e].name }} {{ LABEL[s] }}{{ ", " if not loop.last }}{% else %}not enough people assigned{% endfor %}</span>
+        {% for e, to in d.moves %}
+        <form method="post" action="/roster/edit" class="inline"><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}"><input type="hidden" name="id" value="{{ id }}">
+          <input type="hidden" name="action" value="move"><input type="hidden" name="employee_id" value="{{ e }}"><input type="hidden" name="day" value="{{ d.day }}"><input type="hidden" name="to" value="{{ to or '' }}">
+          <button>{% if to %}Move {{ m.emps[e].name.split()[0] }}'s off to {{ dayname(to) }}{% else %}{{ m.emps[e].name.split()[0] }} works the holiday{% endif %}</button></form>
+        {% endfor %}
+        {% for e in d.backups %}
+        <form method="post" action="/roster/edit" class="inline"><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}"><input type="hidden" name="id" value="{{ id }}">
+          <input type="hidden" name="action" value="cover"><input type="hidden" name="employee_id" value="{{ e }}"><input type="hidden" name="day" value="{{ d.day }}"><input type="hidden" name="line_id" value="{{ g.line }}">
+          <button title="{{ m.emps[e].name }} is working that day and their shift fits">{{ m.emps[e].name }} covers</button></form>
+        {% endfor %}
+        {% if not d.moves and not d.backups %}<span class="tag warn">Nobody can move or cover: assign a backup</span>{% endif %}
+      </li>
+      {% endfor %}
+      {% if g.days|length > 10 %}<li class="muted">and {{ g.days|length - 10 }} more days</li>{% endif %}
+    </ul>
+    <div class="ai"></div>
+  </div>
+  {% endfor %}
+  {% for c in issues.conflicts %}
+  <div class="card bad"><span class="tag bad">Shift conflict</span> <b>{{ m.emps[c.emp].name }}</b>'s assignments{% if c.day %} with the cover on {{ dayname(c.day) }}{% endif %} run over {{ c.hours }} hours, more than their {{ m.emps[c.emp].max_hours }}-hour day. Change an assignment or a shift.</div>
+  {% endfor %}
+  {% for r in issues.rules %}
+  <div class="card warn"><span class="tag warn">Rule</span> <b>{{ m.emps[r.emp].name }}</b> {{ r.text }}{% if r.day %} {{ dayname(r.day) }}{% endif %}.</div>
+  {% endfor %}
+  {% if issues.prefs %}
+  <div class="card"><span class="tag plain">Preferences</span> Coverage came first for:
+    {% for p in issues.prefs %}{{ m.emps[p.emp].name }} (prefers {{ DAYS[m.emps[p.emp].pref_off] }}, worked it {{ p.weeks }} time{{ 's' if p.weeks != 1 }}){{ ", " if not loop.last }}{% endfor %}.</div>
+  {% endif %}
+</div>
+
+{% if changes %}
+<h2>{{ "Changes since publishing" if published else "Change log" }} <span class="n">{{ changes|length }}</span></h2>
+<div class="pane"><table>{% for c in changes %}<tr><td class="muted" style="width: 170px">{{ c.at }} UTC</td><td>{{ c.text }}</td></tr>{% endfor %}</table></div>
+{% endif %}
+
+<div id="menu"><p></p>
+  <form method="post" action="/roster/edit"><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}"><input type="hidden" name="id" value="{{ id }}"><input type="hidden" name="day_view" value="{{ day }}">
+    <input type="hidden" name="action" value="status"><input type="hidden" name="employee_id"><input type="hidden" name="day">
+    <button name="status" value="W">Working</button><button name="status" value="O">Weekly off</button><button name="status" value="H" data-hol>Holiday off</button></form>
+</div>
+<script>
+const menu = document.getElementById("menu");
+document.querySelector(".grid").addEventListener("click", ev => {
+  const c = ev.target.closest("td.c");
+  if (!c || /s-[LCU]/.test(c.className)) return;
+  menu.querySelector("p").textContent = c.dataset.n;
+  menu.querySelector("[name=employee_id]").value = c.dataset.e;
+  menu.querySelector("[name=day]").value = c.dataset.d;
+  menu.querySelector("[data-hol]").hidden = !c.dataset.h;
+  const r = c.getBoundingClientRect();
+  menu.style.left = Math.min(r.left + scrollX, innerWidth - 180) + "px";
+  menu.style.top = r.bottom + scrollY + 4 + "px";
+  menu.style.display = "block";
+  ev.stopPropagation();
+});
+document.addEventListener("click", ev => { if (!menu.contains(ev.target)) menu.style.display = "none"; });
+async function explain(btn, line) {
+  const box = btn.closest(".card").querySelector(".ai");
+  box.style.display = "block"; box.textContent = "Thinking…"; btn.disabled = true;
+  const r = await fetch("/explain", {method: "POST", body: new URLSearchParams({month: "{{ m.month }}", line_id: line})});
+  box.textContent = (await r.json()).text; btn.disabled = false;
+}
+</script>
+{% endif %}
+{% endblock %}
