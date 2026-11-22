@@ -3,6 +3,8 @@ import sqlite3
 import threading
 from pathlib import Path
 
+from planner import Month
+
 DB = os.environ.get("ROSTER_DB") or ("/tmp/roster.db" if os.environ.get("VERCEL") else str(Path(__file__).with_name("roster.db")))
 
 SCHEMA = """
@@ -35,6 +37,7 @@ CREATE TABLE cells(month TEXT NOT NULL,
 CREATE TABLE changes(id INTEGER PRIMARY KEY, month TEXT NOT NULL, at TEXT NOT NULL, text TEXT NOT NULL);
 """
 
+DEMO = "2026-12"
 SIX, DAILY = "1111110", "1111111"
 PODS = {"Atlas": "Meera Iyer", "Beacon": "Kabir Malhotra", "Cedar": "Ananya Gupta", "Delta": "Nikhil Bansal", "Ember": "Tara D'Souza"}
 STAFF = [
@@ -139,5 +142,7 @@ def connect():
         if fresh:
             con.executescript(SCHEMA)
             seed(con)
-            con.commit()
+            m = Month(con, DEMO)
+            m.generate()
+            m.save("Roster generated")
     return con

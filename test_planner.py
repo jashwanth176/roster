@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from collections import Counter
 
-os.environ["ROSTER_DB"] = os.path.join(tempfile.mkdtemp(), "test.db")
+os.environ["ROSTER_DB"] = os.path.join(tempfile.gettempdir(), "roster_test.db")
 
 from planner import Month  # noqa: E402
 from store import connect  # noqa: E402
@@ -20,6 +20,7 @@ class PlannerTest(unittest.TestCase):
 
     def tearDown(self):
         self.con.close()
+        os.remove(os.environ["ROSTER_DB"])
 
     def emp(self, name):
         return next(e for e, x in self.m.emps.items() if x["name"] == name)
@@ -60,6 +61,12 @@ class PlannerTest(unittest.TestCase):
         m.set(d["backups"][0], day, "W")
         m.cover[(d["backups"][0], day)] = gap["line"]
         self.assertGreaterEqual(m.have(gap["line"], day), m.need(gap["line"], day))
+
+    def test_extra_off_by_hand_does_not_create_a_long_run(self):
+        e = self.emp("Neha Kapoor")
+        self.m.set(e, "2026-12-09", "O")
+        self.m.generate()
+        self.assertLessEqual(self.m.longest(e), 6)
 
     def test_replan_keeps_manual_changes(self):
         e, day = self.emp("Ishita Sen"), "2026-12-02"

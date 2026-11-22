@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
@@ -58,6 +58,12 @@ def db():
 
 def back(path, **q):
     return RedirectResponse(f"{path}?{urlencode({k: v for k, v in q.items() if v is not None})}", status_code=303)
+
+
+@app.exception_handler(KeyError)
+@app.exception_handler(ValueError)
+async def invalid(request, err):
+    return back("/roster", msg=f"Nothing changed: {err}." if isinstance(err, ValueError) else "Nothing changed: that request was not valid.")
 
 
 def latest(con):
@@ -132,12 +138,16 @@ async def generate(request: Request, con=Depends(db)):
 async def edit(request: Request, con=Depends(db)):
     f = await request.form()
     m = Month(con, f["month"])
-    before, e, d = m.blocking(), int(f["employee_id"]), f["day"]
+    before, e, d, to = m.blocking(), int(f["employee_id"]), f["day"], f.get("to")
+    if e not in m.emps or d not in m.wd or (to and to not in m.wd):
+        raise ValueError("that employee or day is not in this month")
     name, when = m.emps[e]["name"], f"{DAYS[m.wd[d]]} {int(d[8:])}"
+    if (e, d) in m.leave or (e, to) in m.leave:
+        raise ValueError(f"{name} is on approved leave that day; change it under Leave and comp-offs")
     if f["action"] == "move":
         m.set(e, d, "W")
-        if f.get("to"):
-            m.set(e, f["to"], "O")
+        if to:
+            m.set(e, to, "O")
         text = f"{name} works {when}" + (f", weekly off moved to {DAYS[m.wd[f['to']]]} {int(f['to'][8:])}" if f.get("to") else "")
     elif f["action"] == "cover":
         line = m.lines[int(f["line_id"])]
@@ -145,6 +155,8 @@ async def edit(request: Request, con=Depends(db)):
         m.cover[(e, d)] = line["id"]
         text = f"{name} covers {line['brand']} · {line['process']} on {when}"
     else:
+        if f["status"] not in ("W", "O", "H") or (f["status"] == "H" and d not in m.hol):
+            raise ValueError("that status cannot be set by hand")
         m.set(e, d, f["status"])
         text = f"{name} set to {LABEL[f['status']]} on {when}"
     m.save(text)
@@ -155,7 +167,8 @@ async def edit(request: Request, con=Depends(db)):
 @app.post("/roster/publish")
 async def publish(request: Request, con=Depends(db)):
     f = await request.form()
-    con.execute("UPDATE rosters SET published=datetime('now') WHERE month=?", (f["month"],))
+    if not con.execute("UPDATE rosters SET published=datetime('now') WHERE month=?", (f["month"],)).rowcount:
+        raise ValueError(f"{f['month']} has no roster to publish")
     con.commit()
     return back("/roster", month=f["month"], msg="Published. Later changes are listed under the roster.")
 
@@ -172,9 +185,8 @@ def export(month: str, con=Depends(db)):
 
 
 @app.post("/explain")
-async def explain(request: Request, con=Depends(db)):
-    f = await request.form()
-    m, line = Month(con, f["month"]), int(f["line_id"])
+def explain(month: str = Form(), line_id: int = Form(), con=Depends(db)):
+    m, line = Month(con, month), line_id
     gap = next((g for g in m.issues()["gaps"] if g["line"] == line), None)
     if not gap or not os.environ.get("NVIDIA_API_KEY"):
         return JSONResponse({"text": "Nothing to explain."})
@@ -235,8 +247,10 @@ def parse(fields, f):
         elif t == "week" and not (v.isdigit() and len(v) == 7):
             raise ValueError(f"{label}: give a whole number for each day.")
         elif t == "date":
-            date.fromisoformat(v)
-            row[k] = v
+            try:
+                row[k] = date.fromisoformat(v).isoformat()
+            except ValueError:
+                raise ValueError(f"{label} must be a date.") from None
         elif not v:
             raise ValueError(f"{label} is required.")
         else:
@@ -247,6 +261,8 @@ def parse(fields, f):
         raise ValueError("The shift must start before it ends, within 0 to 24.")
     if "offs" in row and not 0 <= row["offs"] <= 6:
         raise ValueError("Weekly offs must be between 0 and 6.")
+    if row.get("pref_off") is not None and not 0 <= row["pref_off"] <= 6:
+        raise ValueError("Preferred off must be a weekday.")
     return row
 
 
@@ -281,7 +297,7 @@ async def save(request: Request, table: str, con=Depends(db)):
             con.execute(f"INSERT INTO {table}({', '.join(row)}) VALUES({', '.join('?' * len(row))})", list(row.values()))
         con.commit()
     except (ValueError, sqlite3.IntegrityError) as err:
-        msg = "That already exists." if isinstance(err, sqlite3.IntegrityError) else str(err)
+        msg = str(err) if isinstance(err, ValueError) else "That already exists." if "UNIQUE" in str(err) else "That refers to something that no longer exists."
         return back(f"/setup/{table}", edit=f.get("id") or None, msg=msg)
     effect = refresh(con, before, f"{title}: {'edited' if f.get('id') else 'added'} {describe(con, table, fields, row)}")
     return back(f"/setup/{table}", msg="Saved. " + (effect or "No planned roster is affected."))

@@ -1,4 +1,5 @@
 import calendar
+import re
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -12,6 +13,8 @@ class Month:
 
     def __init__(self, con, month):
         self.con, self.month = con, month
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+            raise ValueError(f"{month} is not a month")
         y, m = map(int, month.split("-"))
         dates = [date(y, m, d) for d in range(1, calendar.monthrange(y, m)[1] + 1)]
         self.days = [d.isoformat() for d in dates]
@@ -54,7 +57,6 @@ class Month:
                 self.locked.add(k)
         self.exists = con.execute("SELECT 1 FROM rosters WHERE month=?", (month,)).fetchone() is not None
 
-    # ---- coverage ----
     def need(self, l, d):
         line = self.lines[l]
         return 0 if d in self.hol and not line["holidays"] else int(line["need"][self.wd[d]])
@@ -111,7 +113,6 @@ class Month:
             best = max(best, run)
         return best
 
-    # ---- planning ----
     def sync(self):
         """Apply approved leave and public holidays to the roster as it stands, without re-planning anything else."""
         for e in self.emps:
@@ -136,7 +137,7 @@ class Month:
         """Plan every unlocked cell: leave and holidays first, then weekly offs where they leave coverage intact."""
         for k in [(e, d) for e in self.emps for d in self.days if (e, d) not in self.locked]:
             self.cover.pop(k, None)
-            self.st[k] = self.leave.get(k) or ("H" if k[1] in self.hol and self.closed(*k) else "W")
+            self.st[k] = "W"
         self.sync()
         granted = defaultdict(int)
         for week in self.weeks:
@@ -192,8 +193,9 @@ class Month:
                 return
 
     def smooth(self):
-        """Break runs of more than six working days: first by moving a weekly off within its week without opening a gap,
-        then, at a month edge, by adding the off that week would otherwise take in the next month, even if it opens one."""
+        """Break runs of more than six working days: by moving a weekly off within its week without opening a gap, by giving
+        a day off when all of the person's processes are closed, or at a month edge by adding the off that week would
+        otherwise take in the next month, even if it opens a gap."""
         for e in self.emps:
             while (now := self.longest(e)) > 6:
                 best = (now, 0, None)
@@ -204,12 +206,12 @@ class Month:
                             self.st[(e, d)], self.st[(e, x)] = "W", "O"
                             best = min(best, (self.longest(e), 0, (d, x)), key=lambda b: b[:2])
                             self.st[(e, d)], self.st[(e, x)] = "O", "W"
-                    if len(week) < 7 and not any(self.st.get((e, d)) == "O" for d in week):
-                        for x in free:
-                            hurt = len(self.hurts(e, x))
-                            self.st[(e, x)] = "O"
-                            best = min(best, (self.longest(e), hurt, (None, x)), key=lambda b: b[:2])
-                            self.st[(e, x)] = "W"
+                    edge = len(week) < 7 and not any(self.st.get((e, d)) == "O" for d in week)
+                    for x in [x for x in free if edge or self.closed(e, x)]:
+                        hurt = len(self.hurts(e, x))
+                        self.st[(e, x)] = "O"
+                        best = min(best, (self.longest(e), hurt, (None, x)), key=lambda b: b[:2])
+                        self.st[(e, x)] = "W"
                 if not best[2]:
                     break
                 d, x = best[2]
@@ -217,7 +219,6 @@ class Month:
                     self.st[(e, d)] = "W"
                 self.st[(e, x)] = "O"
 
-    # ---- edits ----
     def set(self, e, d, status):
         self.st[(e, d)] = status
         self.cover.pop((e, d), None)
@@ -234,7 +235,6 @@ class Month:
         self.con.commit()
         self.exists = True
 
-    # ---- validation ----
     def moves(self, l, d):
         out = []
         for e in self.staff[l]:

@@ -2,7 +2,7 @@
 
 A monthly roster planner for a support team that works across many D2C brands. It plans weekly offs around each brand's coverage rules, leave, comp-offs and public holidays, then lists every gap or rule it could not satisfy, with the fixes it can see.
 
-Live demo: https://smart-roster-nu.vercel.app (sample data; it resets when the server restarts)
+Live demo: https://smart-roster-nu.vercel.app. It opens on December 2026, already planned from the sample data.
 
 ## Run it
 
@@ -12,14 +12,20 @@ uvicorn app:app --reload        # http://127.0.0.1:8000
 python -m unittest test_planner # planner tests
 ```
 
-The first start creates `roster.db` with the sample data. Delete the file to start again.
+The first start creates `roster.db` with the sample data and plans December 2026. Delete the file to start again.
 
-Environment variables (see `.env.example`), all optional:
+Environment variables, all optional, listed in `.env.example`. The app does not read `.env` itself, so export them in your shell or set them in Vercel:
 
 - `NVIDIA_API_KEY` turns on the **Explain** button on coverage gaps (a free key from build.nvidia.com). `NVIDIA_MODEL` picks the model.
 - `ROSTER_DB` sets where the SQLite file lives.
 
-On Vercel, `vercel.json` only names the framework; `vercel deploy` does the rest. The database lives in `/tmp` there, so the hosted demo goes back to the sample data whenever the server restarts.
+On Vercel, `vercel.json` only names the framework; `vercel deploy` does the rest. The database lives in each server instance's `/tmp`, so on the hosted demo:
+
+- edits last only while that instance runs;
+- two instances can show different data;
+- every new instance starts again from the sample data.
+
+For edits that persist, run it locally, or point it at Postgres, which I would do before real use.
 
 ## Approach
 
@@ -30,7 +36,7 @@ On Vercel, `vercel.json` only names the framework; `vercel deploy` does the rest
 **Planning.**
 
 1. Approved leave and comp-offs go in first. Anyone whose processes are all closed on a public holiday gets the holiday off.
-2. Weekly offs are placed one week at a time. The most constrained person picks first, meaning the one with the fewest days off that leave no gap. Each person takes the cheapest day: a day that leaves a process short costs most, then a day using up the last spare person, then a run of more than six working days. Preferences make a day cheaper, and so does a day when all their processes are closed.
+2. Weekly offs are placed one week at a time. The most constrained person picks first, meaning the one with the fewest days off that leave no gap. Each person takes the cheapest day. A day that leaves a process short costs most, then every day beyond six in a row, then using up a process's last spare person. A preferred day, or a day when all their processes are closed, costs less.
 3. On holidays that a process works, people who aren't needed get the holiday off. The rest earn a comp-off.
 4. Repair passes then run. Any weekly off that causes a gap is moved to another day in the same week if that day is free. Weekly offs are also shifted within their week to break long runs.
 5. Cells the manager changed by hand are locked and survive a re-plan.
@@ -40,7 +46,7 @@ On Vercel, `vercel.json` only names the framework; `vercel deploy` does the rest
 - **Blocking:** every brand process below its minimum on a day, with who is missing and why. Also any assignment whose shifts don't fit in the employee's day.
 - **Across brands:** one person's absence leaving two or more brands short on the same day.
 - **Rules:** a full week without a weekly off, or more than six days in a row.
-- **Preferences:** preferred days off that were not given.
+- **Preferences:** preferred days off that were not given. With one off a week and at most six days in a row, a person whose off falls on Wednesday can't move to Sunday the next week. So when two people sharing a process both prefer Sunday, the one who gets it keeps it for the month.
 
 Every gap lists the fixes available: move a weekly off within the week, have someone work the holiday, or a ranked list of people who are working that day and whose shift fits. One click applies a fix, and the page shows the issue count before and after.
 
@@ -49,10 +55,10 @@ Every gap lists the fixes available: move a weekly off within the week, have som
 ## Sample data and assumptions
 
 - **Team:** 32 employees in 5 pods, 26 brands and 4 processes.
-- **Brands:** 22 brands (85%) have one dedicated person. Four have two or three people, either on separate processes or sharing one, like Fitkart's Customer Support needing 2 a day.
+- **Brands:** 22 brands (85%) have one dedicated person; four of those also have a pod floater as backup, who counts toward coverage. Four brands have two or three people, either on separate processes or sharing one, like Fitkart's Customer Support needing 2 a day.
 - **Calendars:** six-day processes, daily processes with holidays off, and 365-day processes, plus per-day minimums such as Brewly needing 2 on weekdays and 1 at weekends.
 - **Planted conflicts:** a leave, a comp-off and a 365-day brand with only one person (Moonlit Teas) create conflicts on purpose.
-- **Weeks:** weeks run Monday to Sunday and everyone gets one weekly off a week by default. A week split across two months owes its off once. If the neighbouring month isn't planned yet, the off is placed only where it opens no gap.
+- **Weeks:** weeks run Monday to Sunday and everyone gets one weekly off a week by default. A week split across two months owes its off once. If the neighbouring month isn't planned yet, the off is placed only where it opens no gap, unless skipping it would mean more than six days in a row. Rest wins then, and the gap is flagged.
 - **Coverage:** a person at work covers every process they are assigned that day. That is how one person runs a whole brand.
 - **Shift hours:** each process has shift hours, and an employee's assignments must fit inside their maximum day (9 hours by default).
 - **Leave:** leave is entered as already approved, and it overrides the roster.
@@ -74,7 +80,7 @@ The same rule handles both: a day off is cheap only if the processes stay at the
 Their leave locks the cell, and every process of that brand shows as short that day in one card per process. The card names the missing person and gives ranked cover options: people doing the same process at another brand first, then the same pod, then lighter workloads, and only people whose shift fits. One click assigns the cover for that day and the gap closes.
 
 **5. Conflicting requirements or not enough staff?**
-Rest and approved leave are treated as hard. Coverage minimums are the next priority, and preferences come last. When coverage can't be met, the roster is still produced, but the gap is listed as blocking and Publish asks for confirmation. The roster is never quietly made invalid: Moonlit Teas, a 365-day brand with one person, shows a gap on each of his weekly offs, along with the advice to assign a backup.
+Rest and approved leave are treated as hard. Coverage minimums are the next priority, and preferences come last. When coverage can't be met, the roster is still produced, but the gap is listed as blocking and Publish asks for confirmation. The roster is never quietly made invalid: Moonlit Teas, a 365-day brand with one person, shows a gap on each of his weekly offs. The only cover offered is Kabir, the one person whose shift fits, and where nobody fits the card says to assign a backup.
 
 **6. What is automated and what is left to people?**
 Placing weekly offs, holiday cover, repairs, validation and the impact of each change are automated. Granting comp-offs, borrowing someone from another brand, publishing, and overriding any cell stay with the manager. Those decisions involve people and clients, and the tool can only suggest them. Manual changes are kept on re-plan, so the manager's decisions stick.

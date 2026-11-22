@@ -55,7 +55,7 @@
   </div>
   <div class="row">
     <form method="get" action="/roster" class="row"><input type="month" name="month" value="{{ m.month }}" onchange="this.form.submit()"><input type="hidden" name="view" value="{{ view }}"></form>
-    <form method="post" action="/roster/generate" class="inline"><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}"><input type="hidden" name="id" value="{{ id }}">
+    <form method="post" action="/roster/generate" class="inline"{% if published %} onsubmit="return confirm('This roster is published. Re-plan it anyway?')"{% endif %}><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}"><input type="hidden" name="id" value="{{ id }}">
       <button class="primary" title="Plans every cell you have not changed by hand">{{ ("Re-plan, keep " ~ locked ~ " manual change" ~ ("s" if locked != 1 else "")) if m.exists and locked else ("Re-plan" if m.exists else "Generate roster") }}</button></form>
     {% if m.exists %}
     <form method="post" action="/roster/publish" class="inline" onsubmit="return {{ 'confirm(\'' ~ blocking ~ ' blocking issues are still open. Publish anyway?\')' if blocking else 'true' }}"><input type="hidden" name="month" value="{{ m.month }}"><button>Publish</button></form>
@@ -87,11 +87,12 @@
   <form method="get" action="/roster" style="margin-left: 8px"><input type="hidden" name="month" value="{{ m.month }}"><input type="hidden" name="view" value="{{ view }}">
     <select name="id" onchange="this.form.submit()">{% for i, n in choices[view] %}<option value="{{ i }}"{{ ' selected' if i == id }}>{{ n }}</option>{% endfor %}</select></form>
   {% endif %}
+  {% if view == "pod" and id in pods %}<span class="muted small">Pod lead: {{ pods[id].lead or "none set" }}</span>{% endif %}
 </div>
 
 {% if tally %}
 <div class="stats">
-  {% for code, label in [("W", "working days"), ("O", "weekly offs"), ("H", "public holidays off"), ("L", "leave days"), ("C", "comp-offs taken")] %}<div><strong>{{ tally[code] or 0 }}</strong><span>{{ label }}</span></div>{% endfor %}
+  {% for code, label in [("W", "working days"), ("O", "weekly offs"), ("H", "public holidays off"), ("L", "leave days"), ("C", "comp-offs taken"), ("U", "days unavailable")] %}<div><strong>{{ tally[code] or 0 }}</strong><span>{{ label }}</span></div>{% endfor %}
   <div><strong>{{ earned|length }}</strong><span>comp-offs earned{% if earned %} for working {% for d in earned %}{{ m.hol[d] }}{{ ", " if not loop.last }}{% endfor %}{% endif %}</span></div>
 </div>
 {% endif %}
