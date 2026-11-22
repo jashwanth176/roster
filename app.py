@@ -83,8 +83,8 @@ def impact(con, month, before):
     m = Month(con, month)
     after = m.blocking()
     if after == before:
-        return f"Validated: {after} blocking issue{'s' * (after != 1)} in {month}, unchanged."
-    return f"Validated: blocking issues in {month} went from {before} to {after}."
+        return f"Validated: {after} blocking issue{'s' * (after != 1)} in {m.title}, unchanged."
+    return f"Validated: blocking issues in {m.title} went from {before} to {after}."
 
 
 @app.get("/")
@@ -130,7 +130,7 @@ async def generate(request: Request, con=Depends(db)):
     m.save(f"Re-planned, keeping {kept} manual change{'s' * (kept != 1)}" if m.exists else "Roster generated")
     n = m.blocking()
     return back("/roster", month=m.month, view=f.get("view"), id=f.get("id"),
-                msg=f"Planned {m.month}. {n} blocking issue{'s' * (n != 1)} need attention." if n else f"Planned {m.month} with full coverage.")
+                msg=f"Planned {m.title}. {n} blocking issue{'s' * (n != 1)} need attention." if n else f"Planned {m.title} with full coverage.")
 
 
 @app.post("/roster/edit")
@@ -279,7 +279,7 @@ def refresh(con, before, text):
         now = m.blocking()
         if m.st != snap or now != was:
             m.save(text)
-            out.append(f"{month}: blocking issues {was} to {now}")
+            out.append(f"{m.title}: blocking issues {was} to {now}")
     return "; ".join(out)
 
 
