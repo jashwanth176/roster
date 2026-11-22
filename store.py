@@ -5,11 +5,16 @@ from pathlib import Path
 
 from planner import Month
 
+URL = os.environ.get("DATABASE_URL")
 DB = os.environ.get("ROSTER_DB") or ("/tmp/roster.db" if os.environ.get("VERCEL") else str(Path(__file__).with_name("roster.db")))
+INTEGRITY = (sqlite3.IntegrityError,)
+if URL:
+    import psycopg
+    from psycopg.rows import dict_row
+    INTEGRITY += (psycopg.IntegrityError,)
 
 SCHEMA = """
-CREATE TABLE pods(id INTEGER PRIMARY KEY, name TEXT NOT NULL,
-  lead_id INTEGER REFERENCES employees(id) ON DELETE SET NULL);
+CREATE TABLE pods(id INTEGER PRIMARY KEY, name TEXT NOT NULL, lead_id INTEGER);
 CREATE TABLE employees(id INTEGER PRIMARY KEY, name TEXT NOT NULL,
   pod_id INTEGER REFERENCES pods(id) ON DELETE SET NULL,
   offs INTEGER NOT NULL DEFAULT 1, pref_off INTEGER, max_hours INTEGER NOT NULL DEFAULT 9);
@@ -112,17 +117,17 @@ LEAVES = [("Arjun Rao", "Leave", "2026-12-08", "2026-12-10"), ("Ishita Sen", "Le
 def seed(con):
     ids = {}
     for pod in PODS:
-        ids[pod] = con.execute("INSERT INTO pods(name) VALUES(?)", (pod,)).lastrowid
+        ids[pod] = con.execute("INSERT INTO pods(name) VALUES(?) RETURNING id", (pod,)).fetchone()["id"]
     for name, pod, pref in STAFF:
-        ids[name] = con.execute("INSERT INTO employees(name, pod_id, pref_off) VALUES(?,?,?)", (name, ids[pod], pref)).lastrowid
+        ids[name] = con.execute("INSERT INTO employees(name, pod_id, pref_off) VALUES(?,?,?) RETURNING id", (name, ids[pod], pref)).fetchone()["id"]
     for pod, lead in PODS.items():
         con.execute("UPDATE pods SET lead_id=? WHERE id=?", (ids[lead], ids[pod]))
     for brand, process, need, hol, start, end, staff, backups in LINES:
         for name, table in ((brand, "brands"), (process, "processes")):
             if name not in ids:
-                ids[name] = con.execute(f"INSERT INTO {table}(name) VALUES(?)", (name,)).lastrowid
-        line = con.execute("INSERT INTO lines(brand_id, process_id, need, holidays, start_h, end_h) VALUES(?,?,?,?,?,?)",
-                           (ids[brand], ids[process], need, hol, start, end)).lastrowid
+                ids[name] = con.execute(f"INSERT INTO {table}(name) VALUES(?) RETURNING id", (name,)).fetchone()["id"]
+        line = con.execute("INSERT INTO lines(brand_id, process_id, need, holidays, start_h, end_h) VALUES(?,?,?,?,?,?) RETURNING id",
+                           (ids[brand], ids[process], need, hol, start, end)).fetchone()["id"]
         con.executemany("INSERT INTO assignments(employee_id, line_id, backup) VALUES(?,?,?)",
                         [(ids[n], line, 0) for n in staff] + [(ids[n], line, 1) for n in backups])
     con.executemany("INSERT INTO holidays(day, name) VALUES(?,?)", HOLIDAYS)
@@ -130,19 +135,56 @@ def seed(con):
                     [(ids[n], k, a, b) for n, k, a, b in LEAVES])
 
 
+class Postgres:
+    """A psycopg connection with the sqlite3 calls the app uses (? placeholders, execute and executemany on the connection)."""
+
+    def __init__(self, url):
+        self.con = psycopg.connect(url, row_factory=dict_row, prepare_threshold=None)
+
+    def execute(self, sql, args=()):
+        return self.con.execute(sql.replace("?", "%s"), args)
+
+    def executemany(self, sql, rows):
+        with self.con.cursor() as cur:
+            cur.executemany(sql.replace("?", "%s"), rows)
+
+    def commit(self):
+        self.con.commit()
+
+    def close(self):
+        self.con.close()
+
+
+def create(con):
+    for sql in SCHEMA.replace("id INTEGER PRIMARY KEY", "id SERIAL PRIMARY KEY" if URL else "id INTEGER PRIMARY KEY").split(";"):
+        if sql.strip():
+            con.execute(sql)
+    seed(con)
+    m = Month(con, DEMO)
+    m.generate()
+    m.save("Roster generated")
+
+
 _init = threading.Lock()
 
 
 def connect():
+    """Postgres when DATABASE_URL is set, otherwise a local SQLite file. An empty database gets the sample data."""
+    if URL:
+        con = Postgres(URL)
+        if con.execute("SELECT to_regclass('cells') AS t").fetchone()["t"] is None:
+            con.execute("SELECT pg_advisory_lock(4711)")
+            con.commit()
+            if con.execute("SELECT to_regclass('cells') AS t").fetchone()["t"] is None:
+                create(con)
+            con.execute("SELECT pg_advisory_unlock(4711)")
+            con.commit()
+        return con
     with _init:
         fresh = not os.path.exists(DB)
         con = sqlite3.connect(DB, check_same_thread=False)
         con.row_factory = sqlite3.Row
         con.execute("PRAGMA foreign_keys=ON")
         if fresh:
-            con.executescript(SCHEMA)
-            seed(con)
-            m = Month(con, DEMO)
-            m.generate()
-            m.save("Roster generated")
+            create(con)
     return con

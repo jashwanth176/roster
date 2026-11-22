@@ -16,20 +16,15 @@ The first start creates `roster.db` with the sample data and plans December 2026
 
 Environment variables, all optional, listed in `.env.example`. The app does not read `.env` itself, so export them in your shell or set them in Vercel:
 
+- `DATABASE_URL` points the app at Postgres, for example a Supabase project (use the transaction pooler URL, port 6543). Without it the app uses a local SQLite file. On first connect it creates the tables and loads the sample data.
 - `NVIDIA_API_KEY` turns on the **Explain** button on coverage gaps (a free key from build.nvidia.com). `NVIDIA_MODEL` picks the model.
 - `ROSTER_DB` sets where the SQLite file lives.
 
-On Vercel, `vercel.json` only names the framework; `vercel deploy` does the rest. The database lives in each server instance's `/tmp`, so on the hosted demo:
-
-- edits last only while that instance runs;
-- two instances can show different data;
-- every new instance starts again from the sample data.
-
-For edits that persist, run it locally, or point it at Postgres, which I would do before real use.
+On Vercel, `vercel.json` only names the framework; `vercel deploy` does the rest. Set `DATABASE_URL` there so every server instance shares one database; without it each instance keeps its own temporary copy.
 
 ## Approach
 
-**Stack.** FastAPI, Jinja pages and SQLite, in about 1,100 lines including the sample data and templates. The planner is plain Python with no solver library, so every decision can be explained and a month plans in under a second.
+**Stack.** FastAPI, Jinja pages, and Postgres (Supabase) on the hosted app or SQLite locally, in about 1,150 lines including the sample data and templates. The planner is plain Python with no solver library, so every decision can be explained and a month plans in under a second.
 
 **Data model.** Employees belong to pods, and each pod has a lead. A *coverage rule* is one brand plus one process. It holds the minimum staff for each weekday (0 means closed), whether it runs on public holidays, and its shift hours. *Assignments* link employees to coverage rules, optionally as backup. Leave, comp-offs and unavailability are date ranges. The roster itself is one cell per employee per day.
 

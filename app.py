@@ -2,7 +2,6 @@ import csv
 import io
 import json
 import os
-import sqlite3
 import urllib.request
 from collections import Counter
 from datetime import date
@@ -13,8 +12,8 @@ from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from planner import DAYS, KIND, LABEL, Month
-from store import connect
+from planner import DAYS, KIND, LABEL, Month, now
+from store import INTEGRITY, connect
 
 app = FastAPI()
 T = Jinja2Templates(directory=Path(__file__).with_name("templates"))
@@ -167,7 +166,7 @@ async def edit(request: Request, con=Depends(db)):
 @app.post("/roster/publish")
 async def publish(request: Request, con=Depends(db)):
     f = await request.form()
-    if not con.execute("UPDATE rosters SET published=datetime('now') WHERE month=?", (f["month"],)).rowcount:
+    if not con.execute("UPDATE rosters SET published=? WHERE month=?", (now(), f["month"])).rowcount:
         raise ValueError(f"{f['month']} has no roster to publish")
     con.commit()
     return back("/roster", month=f["month"], msg="Published. Later changes are listed under the roster.")
@@ -267,7 +266,7 @@ def parse(fields, f):
 
 
 def planned(con):
-    return {month: Month(con, month).blocking() for (month,) in con.execute("SELECT month FROM rosters ORDER BY month").fetchall()}
+    return {month: Month(con, month).blocking() for month in [r["month"] for r in con.execute("SELECT month FROM rosters ORDER BY month").fetchall()]}
 
 
 def refresh(con, before, text):
@@ -296,8 +295,8 @@ async def save(request: Request, table: str, con=Depends(db)):
         else:
             con.execute(f"INSERT INTO {table}({', '.join(row)}) VALUES({', '.join('?' * len(row))})", list(row.values()))
         con.commit()
-    except (ValueError, sqlite3.IntegrityError) as err:
-        msg = str(err) if isinstance(err, ValueError) else "That already exists." if "UNIQUE" in str(err) else "That refers to something that no longer exists."
+    except (ValueError, *INTEGRITY) as err:
+        msg = str(err) if isinstance(err, ValueError) else "That already exists." if "unique" in str(err).lower() else "That refers to something that no longer exists."
         return back(f"/setup/{table}", edit=f.get("id") or None, msg=msg)
     effect = refresh(con, before, f"{title}: {'edited' if f.get('id') else 'added'} {describe(con, table, fields, row)}")
     return back(f"/setup/{table}", msg="Saved. " + (effect or "No planned roster is affected."))

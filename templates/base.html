@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>{% block title %}Roster{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Geist:wght@500..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><rect x='1' y='1' width='22' height='22' rx='6' fill='%232F6FD8'/><g fill='%23fff'><rect x='5' y='5' width='4' height='4' rx='1'/><rect x='10' y='5' width='4' height='4' rx='1'/><rect x='15' y='5' width='4' height='4' rx='1' opacity='.35'/><rect x='5' y='10' width='4' height='4' rx='1'/><rect x='10' y='10' width='4' height='4' rx='1' opacity='.35'/><rect x='15' y='10' width='4' height='4' rx='1'/><rect x='5' y='15' width='4' height='4' rx='1' opacity='.35'/><rect x='10' y='15' width='4' height='4' rx='1'/><rect x='15' y='15' width='4' height='4' rx='1'/></g></svg>">
 <style>
 :root {
   --bg: #F7F6F5; --paper: #FFFFFF; --ink: #1C1917; --muted: #6D6B68; --line: #E6E4E0; --empty: #EDECEA;
@@ -14,27 +16,22 @@
   --timing: #9A5B0B; --defend: #B4321F; --good: #1F7A4D;
   --lift: 0 1px 2px rgb(28 25 23 / .05), 0 2px 8px rgb(28 25 23 / .04); --shadow: 0 0 0 1px var(--line), var(--lift);
   --r-ctl: 8px; --r-panel: 14px;
-  --sans: "Inter", system-ui, sans-serif; --mono: "Geist Mono", ui-monospace, Menlo, monospace; --display: "Geist", var(--sans);
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #12100E; --paper: #1C1A17; --ink: #EDEAE6; --muted: #A6A09B; --line: #2F2C28; --empty: #262320;
-          --signal: #6E9BEA; --signal-soft: #1C2638; --sheen: linear-gradient(180deg, #6E9BEA, #4D85E1);
-          --timing: #E9A752; --defend: #F08A7A; --good: #5CC98E; --lift: 0 1px 2px rgb(0 0 0 / .3); }
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
 a { color: var(--signal); text-underline-offset: 3px; }
-h1 { font-family: var(--display); font-size: 24px; line-height: 1.2; letter-spacing: -0.03em; font-weight: 600; margin: 4px 0 6px; }
-h2 { font-family: var(--display); font-size: 17px; letter-spacing: -0.02em; font-weight: 600; margin: 32px 0 12px; }
-h2 .n { font-family: var(--sans); font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+h1 { font-size: 24px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 600; margin: 4px 0 6px; }
+h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
+h2 .n { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 6px; }
 h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
 .muted { color: var(--muted); } .small { font-size: 13px; }
 .app { display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 100vh; }
 .side { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 0 10px 12px; }
 .brand { display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 4px; margin-bottom: 8px; color: var(--ink); text-decoration: none;
-         font-weight: 600; font-size: 18px; letter-spacing: -0.045em; }
-.brand i { width: 24px; height: 24px; border-radius: 7px; background: var(--sheen); display: grid; place-items: center; color: #fff; font: 600 12px var(--mono); font-style: normal; }
+         font-weight: 600; font-size: 18px; letter-spacing: -0.02em; }
+.brand svg { width: 26px; height: 26px; flex: none; }
 .side a.item { display: block; padding: 6px 10px; border-radius: var(--r-ctl); color: var(--ink); text-decoration: none; font-weight: 500; }
 .side a.item:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .side a.item.on { background: var(--paper); font-weight: 600; box-shadow: var(--shadow); }
@@ -65,7 +62,7 @@ tr:last-child td { border-bottom: 0; }
 .scroll { overflow-x: auto; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0; }
 .stats > div { padding: 12px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--lift); }
-.stats strong { display: block; font-family: var(--display); font-size: 24px; font-weight: 600; letter-spacing: -0.035em; }
+.stats strong { display: block; font-size: 24px; font-weight: 600; }
 .stats span { font-size: 13px; color: var(--muted); }
 .flash { background: var(--signal-soft); border-radius: var(--r-ctl); padding: 10px 14px; margin: 12px 0; max-width: 90ch; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -77,7 +74,7 @@ form.inline { display: inline; }
 <body>
 <div class="app">
   <nav class="side">
-    <a class="brand" href="/"><i>R</i>Roster</a>
+    <a class="brand" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="6" fill="#2F6FD8"/><g fill="#fff"><rect x="5" y="5" width="4" height="4" rx="1"/><rect x="10" y="5" width="4" height="4" rx="1"/><rect x="15" y="5" width="4" height="4" rx="1" opacity=".35"/><rect x="5" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1" opacity=".35"/><rect x="15" y="10" width="4" height="4" rx="1"/><rect x="5" y="15" width="4" height="4" rx="1" opacity=".35"/><rect x="10" y="15" width="4" height="4" rx="1"/><rect x="15" y="15" width="4" height="4" rx="1"/></g></svg>Roster</a>
     <a class="item{{ ' on' if here == 'roster' }}" href="/roster">Monthly roster</a>
     <div class="group">Setup</div>
     {% for key, (label, _) in tables.items() %}<a class="item{{ ' on' if here == key }}" href="/setup/{{ key }}">{{ label }}</a>{% endfor %}

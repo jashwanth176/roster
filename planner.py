@@ -1,11 +1,15 @@
 import calendar
 import re
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 LABEL = {"W": "working", "O": "weekly off", "H": "public holiday", "L": "on leave", "C": "comp-off", "U": "unavailable"}
 KIND = {"Leave": "L", "Comp-off": "C", "Unavailable": "U"}
+
+
+def now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class Month:
@@ -229,9 +233,9 @@ class Month:
         self.con.executemany("INSERT INTO cells VALUES(?,?,?,?,?,?)", [
             (self.month, e, d, self.st[(e, d)], self.cover.get((e, d)), int((e, d) in self.locked))
             for e in self.emps for d in self.days])
-        self.con.execute("INSERT OR IGNORE INTO rosters(month) VALUES(?)", (self.month,))
+        self.con.execute("INSERT INTO rosters(month) VALUES(?) ON CONFLICT DO NOTHING", (self.month,))
         if text:
-            self.con.execute("INSERT INTO changes(month, at, text) VALUES(?, datetime('now'), ?)", (self.month, text))
+            self.con.execute("INSERT INTO changes(month, at, text) VALUES(?, ?, ?)", (self.month, now(), text))
         self.con.commit()
         self.exists = True
 
