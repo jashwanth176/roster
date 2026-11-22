@@ -2,7 +2,7 @@
 
 A monthly roster planner for a support team that works across many D2C brands. It plans weekly offs around each brand's coverage rules, leave, comp-offs and public holidays, then lists every gap or rule it could not satisfy, with the fixes it can see.
 
-Live demo: https://smart-roster.vercel.app
+Live demo: https://smart-roster-nu.vercel.app (sample data; it resets when the server restarts)
 
 ## Run it
 
@@ -19,7 +19,7 @@ Environment variables (see `.env.example`), all optional:
 - `NVIDIA_API_KEY` turns on the **Explain** button on coverage gaps (a free key from build.nvidia.com). `NVIDIA_MODEL` picks the model.
 - `ROSTER_DB` sets where the SQLite file lives.
 
-On Vercel the app runs as it is (`vercel deploy`). The database lives in `/tmp` there, so the hosted demo goes back to the sample data whenever the server restarts.
+On Vercel, `vercel.json` only names the framework; `vercel deploy` does the rest. The database lives in `/tmp` there, so the hosted demo goes back to the sample data whenever the server restarts.
 
 ## Approach
 
