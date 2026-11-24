@@ -199,7 +199,8 @@ def explain(month: str = Form(), line_id: int = Form(), con=Depends(db)):
                         "can_move_weekly_off": [f"{name(e)} to {to}" if to else f"{name(e)} works the holiday" for e, to in d["moves"]],
                         "free_to_cover": [name(e) for e in d["backups"]]} for d in gap["days"][:8]],
     }
-    body = {"model": os.environ.get("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct"), "temperature": 0.2, "max_tokens": 300,
+    body = {"model": os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b"), "temperature": 0.2, "max_tokens": 300,
+            "chat_template_kwargs": {"enable_thinking": False},
             "messages": [{"role": "system", "content": "You explain one staffing gap in a monthly roster to an operations "
                           "manager. Use only the facts given; never invent people or dates. In three or four plain sentences: "
                           "what is short and on which days, why, and the most practical fix among the options listed. "
